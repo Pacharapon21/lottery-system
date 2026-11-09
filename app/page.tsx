@@ -1,7 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+
+type Theme = "light" | "dark";
+const THEME_STORAGE_KEY = "prize-check-theme";
+const THEME_CHANGE_EVENT = "prize-check-theme-change";
+
+function getThemeSnapshot(): Theme {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  if (savedTheme === "light" || savedTheme === "dark") {
+    return savedTheme;
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function subscribeToTheme(onChange: () => void): () => void {
+  const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+  window.addEventListener("storage", onChange);
+  window.addEventListener(THEME_CHANGE_EVENT, onChange);
+  colorScheme.addEventListener("change", onChange);
+
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(THEME_CHANGE_EVENT, onChange);
+    colorScheme.removeEventListener("change", onChange);
+  };
+}
+
+function getServerThemeSnapshot(): Theme {
+  return "light";
+}
 
 type PrizeCategory = {
   id: string;
@@ -69,15 +105,64 @@ function formatDate(value: string | null): string {
 }
 
 export default function Home() {
+  const theme = useSyncExternalStore(
+    subscribeToTheme,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState("");
   const [ticketNumber, setTicketNumber] = useState("");
   const [lookup, setLookup] = useState<TicketLookup | null>(null);
+  const [celebration, setCelebration] = useState<TicketLookup | null>(null);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [checkingTicket, setCheckingTicket] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [error, setError] = useState("");
   const [lookupError, setLookupError] = useState("");
+  const celebrationCloseRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!celebration) {
+      return;
+    }
+
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const timeout = window.setTimeout(() => setCelebration(null), 10_000);
+    document.body.style.overflow = "hidden";
+    const handleDialogKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setCelebration(null);
+        return;
+      }
+      if (event.key === "Tab") {
+        const focusableElements = document.querySelectorAll<HTMLElement>(
+          ".celebration-card button",
+        );
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+        if (event.shiftKey && document.activeElement === firstElement) {
+          event.preventDefault();
+          lastElement?.focus();
+        } else if (!event.shiftKey && document.activeElement === lastElement) {
+          event.preventDefault();
+          firstElement?.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleDialogKeys);
+    celebrationCloseRef.current?.focus();
+    return () => {
+      window.clearTimeout(timeout);
+      document.removeEventListener("keydown", handleDialogKeys);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus instanceof HTMLElement) {
+        previousFocus.focus();
+      }
+    };
+  }, [celebration]);
 
   useEffect(() => {
     let active = true;
@@ -112,9 +197,16 @@ export default function Home() {
     [events, selectedEventId],
   );
 
+  function toggleTheme() {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+  }
+
   async function checkTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLookup(null);
+    setCelebration(null);
     setLookupError("");
     setError("");
 
@@ -133,6 +225,9 @@ export default function Home() {
         `/api/public/events/${encodeURIComponent(selectedEvent.id)}/tickets/${ticketNumber}`,
       );
       setLookup(result);
+      if (result.won) {
+        setCelebration(result);
+      }
     } catch (cause) {
       setLookupError(cause instanceof Error ? cause.message : "ตรวจสอบสลากไม่สำเร็จ");
     } finally {
@@ -141,7 +236,7 @@ export default function Home() {
   }
 
   return (
-    <div className="site-shell">
+    <div className="site-shell" data-theme={theme}>
       <header className="topbar">
         <Link className="brand" href="/" aria-label="ตรวจสอบรางวัล หน้าหลัก">
           <span className="brand-mark" aria-hidden="true">✦</span>
@@ -150,23 +245,108 @@ export default function Home() {
             <span className="brand-subtitle">เว็บตรวจสอบรางวัล</span>
           </span>
         </Link>
-        <Link className="topbar-link" href="/admin">
-          <span aria-hidden="true">▦</span>
-          สำหรับผู้ดูแล
-        </Link>
+        <div className="topbar-actions">
+          <button
+            aria-label={`เปลี่ยนเป็นโหมด${theme === "light" ? "มืด" : "สว่าง"}`}
+            aria-pressed={theme === "dark"}
+            className="theme-toggle"
+            onClick={toggleTheme}
+            type="button"
+          >
+            <span aria-hidden="true">{theme === "light" ? "☾" : "☀"}</span>
+            {theme === "light" ? "โหมดมืด" : "โหมดสว่าง"}
+          </button>
+          <Link className="topbar-link" href="/admin">
+            <span aria-hidden="true">▦</span>
+            สำหรับผู้ดูแล
+          </Link>
+        </div>
       </header>
 
       <main className="home-main">
-        <section className="hero">
-          <div className="hero-copy">
-            <span className="hero-kicker">Check your lucky number</span>
-            <h1>ตรวจสอบรางวัล<br />ได้ทันที</h1>
-            <p>
-              กรอกหมายเลขสลาก 5 หลักของคุณ แล้วดูผลรางวัลได้ทันที
-              พร้อมรายชื่อผู้โชคดีและประวัติการประกาศผลที่ตรวจสอบได้
-            </p>
+        <section className="panel results-panel" aria-labelledby="latest-results-title">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Winning numbers</span>
+              <h2 id="latest-results-title">ผลรางวัลประจำงวด</h2>
+              <p>เลขรางวัลและรายชื่อผู้โชคดี อัปเดตจากผลที่ประกาศแล้ว</p>
+            </div>
+            {selectedEvent && <span className="draw-type-pill">{selectedEvent.drawHistories.length} รอบ</span>}
           </div>
-          <div className="hero-emblem" aria-hidden="true"><span>✦</span></div>
+
+          {!selectedEvent ? (
+            <div className="empty-state">
+              {loadingEvents ? "กำลังโหลดผลรางวัล..." : "ยังไม่มีกิจกรรมที่เปิดให้ตรวจสอบ"}
+            </div>
+          ) : (
+            <div className="draw-board">
+              {selectedEvent.prizeCategories.length > 0 ? (
+                selectedEvent.prizeCategories.map((prize, index) => {
+                  const draws = selectedEvent.drawHistories.filter(
+                    (draw) => draw.prizeCategory.id === prize.id,
+                  );
+                  const winnerCount = draws.reduce(
+                    (total, draw) => total + draw.winnersCount,
+                    0,
+                  );
+                  const isLastThree = prize.drawType === "LAST_3_DIGITS";
+
+                  return (
+                    <article
+                      className={`prize-board-card ${index === 0 ? "featured" : ""}`}
+                      key={prize.id}
+                    >
+                      <div className="prize-board-heading">
+                        <span className="prize-rank">{String(index + 1).padStart(2, "0")}</span>
+                        <div>
+                          <h3>{prize.name}</h3>
+                          <span className="prize-kind">
+                            {isLastThree ? "เลขท้าย 3 ตัว" : "รางวัลเลข 5 หลัก"}
+                          </span>
+                        </div>
+                        {draws.length > 0 && (
+                          <span className="prize-winner-count">{winnerCount} รางวัล</span>
+                        )}
+                      </div>
+
+                      {draws.length > 0 ? (
+                        <>
+                          <div className={`prize-number-list ${isLastThree ? "last-three-list" : ""}`}>
+                            {draws.map((draw) => (
+                              <span className="prize-number-tile" key={draw.id}>
+                                {draw.drawnNumber}
+                              </span>
+                            ))}
+                          </div>
+                          {isLastThree && draws.map((draw) => (
+                            <div className="last-three-winners" key={`${draw.id}-winners`}>
+                              <span>สลากที่ถูกรางวัล</span>
+                              <div className="winner-chips">
+                                {draw.prizeResults.map(({ ticket }) => (
+                                  <span className="winner-chip" key={ticket.number}>
+                                    {ticket.number}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          <p className="prize-announced">
+                            ประกาศล่าสุด {formatDate(draws[0].announcedAt)}
+                          </p>
+                        </>
+                      ) : (
+                        <div className="prize-pending">รอประกาศผลรางวัล</div>
+                      )}
+                    </article>
+                  );
+                })
+              ) : (
+                <div className="empty-state">
+                  {loadingEvents ? "กำลังโหลดผลรางวัล..." : "กิจกรรมนี้ยังไม่มีประเภทรางวัล"}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <div className="content-grid">
@@ -187,8 +367,8 @@ export default function Home() {
 
               {demoMode && (
                 <div className="notice demo-notice" role="status">
-                  กำลังแสดงข้อมูลตัวอย่าง ลองตรวจหมายเลข <strong>01287</strong>,{" "}
-                  <strong>01942</strong>, <strong>00128</strong> หรือ <strong>01128</strong>{" "}
+                  กำลังแสดงข้อมูลตัวอย่าง ลองตรวจหมายเลข <strong>30656</strong>,{" "}
+                  <strong>38335</strong>, <strong>74388</strong> หรือ <strong>30690</strong>{" "}
                   — เชื่อมต่อฐานข้อมูลเพื่อใช้ผลรางวัลจริง
                 </div>
               )}
@@ -203,6 +383,7 @@ export default function Home() {
                     onChange={(event) => {
                       setSelectedEventId(event.target.value);
                       setLookup(null);
+                      setCelebration(null);
                       setLookupError("");
                     }}
                     disabled={loadingEvents || events.length === 0}
@@ -225,6 +406,7 @@ export default function Home() {
                       onChange={(event) => {
                         setTicketNumber(event.target.value.replace(/\D/g, "").slice(0, 5));
                         setLookup(null);
+                        setCelebration(null);
                       }}
                       placeholder="00000"
                       value={ticketNumber}
@@ -242,9 +424,16 @@ export default function Home() {
 
               {lookupError && <div className="notice" role="alert">{lookupError}</div>}
               {lookup && (
-                <div className={`result-card ${lookup.won ? "is-winner" : ""}`} role="status">
+                <div
+                  className={`result-card ${lookup.won ? "is-winner" : ""}`}
+                  role="status"
+                >
                   <div className="result-status">
-                    <span className="status-dot" aria-hidden="true" />
+                    {lookup.won ? (
+                      <span className="result-trophy" aria-hidden="true">★</span>
+                    ) : (
+                      <span className="status-dot" aria-hidden="true" />
+                    )}
                     {lookup.ticketExists
                       ? lookup.won
                         ? `ยินดีด้วย! สลาก ${lookup.ticketNumber} ถูกรางวัล`
@@ -262,46 +451,6 @@ export default function Home() {
               )}
             </section>
 
-            <section className="panel" aria-labelledby="latest-results-title">
-              <div className="panel-heading">
-                <div>
-                  <span className="eyebrow">Winning numbers</span>
-                  <h2 id="latest-results-title">ประกาศผลรางวัล</h2>
-                  <p>เลขที่ออกและรายชื่อผู้ถูกรางวัลที่ประกาศแล้ว</p>
-                </div>
-                {selectedEvent && <span className="draw-type-pill">{selectedEvent.drawHistories.length} รอบ</span>}
-              </div>
-
-              {!selectedEvent && !loadingEvents ? (
-                <div className="empty-state">ยังไม่มีกิจกรรมที่เปิดให้ตรวจสอบ</div>
-              ) : selectedEvent?.drawHistories.length ? (
-                <div className="result-list">
-                  {selectedEvent.drawHistories.map((draw) => (
-                    <article className="history-row" key={draw.id}>
-                      <span className="history-icon" aria-hidden="true">✦</span>
-                      <span>
-                        <span className="history-name">{draw.prizeCategory.name}</span>
-                        <span className="history-meta">
-                          {formatDate(draw.announcedAt)} · ผู้ถูกรางวัล {draw.winnersCount} ใบ
-                        </span>
-                        {draw.prizeResults.length > 0 && (
-                          <span className="winner-chips">
-                            {draw.prizeResults.map(({ ticket }) => (
-                              <span className="winner-chip" key={ticket.number}>{ticket.number}</span>
-                            ))}
-                          </span>
-                        )}
-                      </span>
-                      <span className="history-number">{draw.drawnNumber}</span>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  {loadingEvents ? "กำลังโหลดผลรางวัล..." : "กิจกรรมนี้ยังไม่มีผลประกาศ"}
-                </div>
-              )}
-            </section>
           </div>
 
           <aside className="stack">
@@ -379,6 +528,65 @@ export default function Home() {
         <span>PRIZE CHECK · เว็บตรวจสอบรางวัล</span>
         <span>ตรวจผลรางวัลได้ทุกหมายเลข โปร่งใส และตรวจสอบย้อนหลังได้</span>
       </footer>
+
+      {celebration && (
+        <div
+          aria-labelledby="celebration-title"
+          aria-modal="true"
+          className="celebration-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setCelebration(null);
+            }
+          }}
+          role="dialog"
+        >
+          <div aria-hidden="true" className="confetti">
+            {Array.from({ length: 36 }, (_, index) => (
+              <span
+                className="confetti-piece"
+                key={index}
+                style={{
+                  left: `${(index * 37) % 100}%`,
+                  animationDelay: `${(index % 9) * 0.08}s`,
+                }}
+              />
+            ))}
+          </div>
+          <section className="celebration-card">
+            <button
+              aria-label="ปิดหน้าต่างแสดงความยินดี"
+              className="celebration-close"
+              onClick={() => setCelebration(null)}
+              ref={celebrationCloseRef}
+              type="button"
+            >
+              ×
+            </button>
+            <div aria-hidden="true" className="celebration-medal">★</div>
+            <span className="celebration-kicker">LUCKY WINNER</span>
+            <h2 id="celebration-title">ยินดีด้วย! คุณถูกรางวัล</h2>
+            <p className="celebration-ticket">{celebration.ticketNumber}</p>
+            <div className="celebration-prizes">
+              {celebration.wins.map((win) => (
+                <div className="celebration-prize" key={`${win.wonAt}-${win.prizeCategory.id}`}>
+                  <strong>{win.prizeCategory.name}</strong>
+                  <span>เลขที่ออก {win.drawHistory.drawnNumber}</span>
+                </div>
+              ))}
+            </div>
+            <p className="celebration-caption">ขอให้วันนี้เป็นวันดี ๆ ของคุณ ✨</p>
+            <button
+              className="celebration-button"
+              onClick={() => setCelebration(null)}
+              type="button"
+            >
+              สุดยอด!
+            </button>
+            <span aria-hidden="true" className="celebration-progress" />
+          </section>
+        </div>
+      )}
     </div>
   );
 }

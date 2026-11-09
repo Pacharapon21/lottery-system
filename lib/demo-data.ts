@@ -38,11 +38,51 @@ const secondPrize: DemoPrizeCategory = {
   drawType: "FULL_TICKET",
 };
 
+const thirdPrize: DemoPrizeCategory = {
+  id: "demo-prize-third",
+  name: "รางวัลที่ 3",
+  drawType: "FULL_TICKET",
+};
+
+const fourthPrize: DemoPrizeCategory = {
+  id: "demo-prize-fourth",
+  name: "รางวัลที่ 4",
+  drawType: "FULL_TICKET",
+};
+
+const fifthPrize: DemoPrizeCategory = {
+  id: "demo-prize-fifth",
+  name: "รางวัลที่ 5",
+  drawType: "FULL_TICKET",
+};
+
 const lastThreePrize: DemoPrizeCategory = {
   id: "demo-prize-last-three",
   name: "เลขท้าย 3 ตัว",
   drawType: "LAST_3_DIGITS",
 };
+
+const fullTicketDraws: DemoDraw[] = [
+  { prizeCategory: firstPrize, numbers: ["30656"] },
+  { prizeCategory: secondPrize, numbers: ["38335", "74388", "08954"] },
+  { prizeCategory: thirdPrize, numbers: ["93141", "31211", "59984"] },
+  { prizeCategory: fourthPrize, numbers: ["81202", "08731", "83104", "54828", "63190"] },
+  { prizeCategory: fifthPrize, numbers: ["84983", "11102", "56344", "69272", "38519", "34206"] },
+].flatMap(({ prizeCategory, numbers }, prizeIndex) =>
+  numbers.map((number, numberIndex) => {
+    const announcedAt = new Date(
+      Date.UTC(2026, 0, 1, 9, prizeIndex * 10 + numberIndex * 2),
+    ).toISOString();
+    return {
+      id: `demo-draw-${prizeCategory.id}-${numberIndex + 1}`,
+      drawnNumber: number,
+      winnersCount: 1,
+      announcedAt,
+      prizeCategory,
+      prizeResults: [{ ticket: { number } }],
+    };
+  }),
+);
 
 /**
  * ข้อมูลตัวอย่างที่ใช้เมื่อยังไม่ได้ตั้งค่า DATABASE_URL
@@ -54,39 +94,35 @@ export const DEMO_EVENTS: DemoEvent[] = [
     name: "กิจกรรมนำโชค 2026 (ข้อมูลตัวอย่าง)",
     description:
       "ข้อมูลตัวอย่างสำหรับทดลองตรวจสอบรางวัล เชื่อมต่อฐานข้อมูลเพื่อใช้ผลรางวัลจริงจากหน้าผู้ดูแลระบบ",
-    ticketCount: 2_000,
+    ticketCount: 99_999,
     status: "ACTIVE",
     createdAt: "2026-01-01T00:00:00.000Z",
-    prizeCategories: [firstPrize, secondPrize, lastThreePrize],
+    prizeCategories: [
+      firstPrize,
+      secondPrize,
+      thirdPrize,
+      fourthPrize,
+      fifthPrize,
+      lastThreePrize,
+    ],
     drawHistories: [
-      {
-        id: "demo-draw-first",
-        drawnNumber: "01287",
-        winnersCount: 1,
-        announcedAt: "2026-01-01T09:00:00.000Z",
-        prizeCategory: firstPrize,
-        prizeResults: [{ ticket: { number: "01287" } }],
-      },
-      {
-        id: "demo-draw-second",
-        drawnNumber: "01942",
-        winnersCount: 1,
-        announcedAt: "2026-01-01T09:30:00.000Z",
-        prizeCategory: secondPrize,
-        prizeResults: [{ ticket: { number: "01942" } }],
-      },
+      ...fullTicketDraws,
       {
         id: "demo-draw-last-three",
-        drawnNumber: "128",
-        winnersCount: 2,
-        announcedAt: "2026-01-01T10:00:00.000Z",
+        drawnNumber: "690",
+        winnersCount: 3,
+        announcedAt: "2026-01-01T10:30:00.000Z",
         prizeCategory: lastThreePrize,
         prizeResults: [
-          { ticket: { number: "00128" } },
-          { ticket: { number: "01128" } },
+          { ticket: { number: "30690" } },
+          { ticket: { number: "50690" } },
+          { ticket: { number: "76690" } },
         ],
       },
-    ],
+    ].sort(
+      (left, right) =>
+        Date.parse(right.announcedAt ?? "") - Date.parse(left.announcedAt ?? ""),
+    ),
   },
 ];
 
