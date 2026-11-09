@@ -621,6 +621,18 @@ button:disabled {
   color: #286044;
 }
 
+.demo-notice {
+  margin-top: 18px;
+  border-color: #d7e3ef;
+  background: #f4f8fd;
+  color: #2f5d86;
+}
+
+.demo-notice strong {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
 .site-footer {
   display: flex;
   width: min(1180px, calc(100% - 48px));

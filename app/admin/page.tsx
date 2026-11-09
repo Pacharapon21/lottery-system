@@ -106,6 +106,7 @@ export default function AdminPage() {
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
   const [busyAction, setBusyAction] = useState("");
   const [error, setError] = useState("");
@@ -115,13 +116,14 @@ export default function AdminPage() {
     let active = true;
     async function initialize() {
       try {
-        const session = await apiRequest<{ admin: Admin | null }>(
+        const session = await apiRequest<{ admin: Admin | null; demo?: boolean }>(
           "/api/admin/auth/session",
         );
         if (!active) {
           return;
         }
         setAdmin(session.admin);
+        setDemoMode(Boolean(session.demo));
         if (session.admin) {
           const result = await apiRequest<{ events: AdminEvent[] }>(
             "/api/admin/events",
@@ -323,6 +325,12 @@ export default function AdminPage() {
               <span className="eyebrow">Admin access</span>
               <h1>เข้าสู่ระบบผู้ดูแล</h1>
               <p>ใช้บัญชีผู้ดูแลที่ตั้งค่าไว้ในระบบเพื่อจัดการกิจกรรมและผลรางวัล</p>
+              {demoMode && (
+                <div className="notice demo-notice" role="status">
+                  หน้าตรวจสอบรางวัลกำลังใช้ข้อมูลตัวอย่าง ยังไม่ได้ตั้งค่า DATABASE_URL
+                  จึงไม่สามารถเข้าสู่ระบบผู้ดูแลได้
+                </div>
+              )}
               {error && <div className="notice" role="alert">{error}</div>}
               <form className="form-stack" onSubmit={login}>
                 <div>
@@ -347,7 +355,7 @@ export default function AdminPage() {
                     type="password"
                   />
                 </div>
-                <button className="primary-button full-width" disabled={loginBusy} type="submit">
+                <button className="primary-button full-width" disabled={loginBusy || demoMode} type="submit">
                   {loginBusy ? "กำลังตรวจสอบ..." : "เข้าสู่ระบบ"}
                 </button>
               </form>

@@ -33,6 +33,7 @@ type TicketLookup = {
   ticketNumber: string;
   ticketExists: boolean;
   won: boolean;
+  demo?: boolean;
   wins: {
     wonAt: string;
     prizeCategory: PrizeCategory;
@@ -74,17 +75,19 @@ export default function Home() {
   const [lookup, setLookup] = useState<TicketLookup | null>(null);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [checkingTicket, setCheckingTicket] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
   const [error, setError] = useState("");
   const [lookupError, setLookupError] = useState("");
 
   useEffect(() => {
     let active = true;
-    getApiData<{ events: PublicEvent[] }>("/api/public/events")
-      .then(({ events: loadedEvents }) => {
+    getApiData<{ events: PublicEvent[]; demo?: boolean }>("/api/public/events")
+      .then(({ events: loadedEvents, demo }) => {
         if (!active) {
           return;
         }
         setEvents(loadedEvents);
+        setDemoMode(Boolean(demo));
         const activeEvent = loadedEvents.find((event) => event.status === "ACTIVE");
         setSelectedEventId(activeEvent?.id ?? loadedEvents[0]?.id ?? "");
       })
@@ -140,11 +143,11 @@ export default function Home() {
   return (
     <div className="site-shell">
       <header className="topbar">
-        <Link className="brand" href="/" aria-label="Lucky Draw หน้าหลัก">
+        <Link className="brand" href="/" aria-label="ตรวจสอบรางวัล หน้าหลัก">
           <span className="brand-mark" aria-hidden="true">✦</span>
           <span>
-            <span className="brand-title">LUCKY DRAW</span>
-            <span className="brand-subtitle">ระบบจับสลากรางวัล</span>
+            <span className="brand-title">PRIZE CHECK</span>
+            <span className="brand-subtitle">เว็บตรวจสอบรางวัล</span>
           </span>
         </Link>
         <Link className="topbar-link" href="/admin">
@@ -156,11 +159,11 @@ export default function Home() {
       <main className="home-main">
         <section className="hero">
           <div className="hero-copy">
-            <span className="hero-kicker">A little luck, a lovely surprise</span>
-            <h1>ทุกหมายเลข<br />มีโอกาสรับรางวัล</h1>
+            <span className="hero-kicker">Check your lucky number</span>
+            <h1>ตรวจสอบรางวัล<br />ได้ทันที</h1>
             <p>
-              ตรวจสอบผลสลากและติดตามผู้โชคดีได้ที่นี่
-              ผลรางวัลจะเผยแพร่หลังยืนยันจากผู้ดูแลแล้วเท่านั้น
+              กรอกหมายเลขสลาก 5 หลักของคุณ แล้วดูผลรางวัลได้ทันที
+              พร้อมรายชื่อผู้โชคดีและประวัติการประกาศผลที่ตรวจสอบได้
             </p>
           </div>
           <div className="hero-emblem" aria-hidden="true"><span>✦</span></div>
@@ -171,9 +174,9 @@ export default function Home() {
             <section className="panel" aria-labelledby="ticket-lookup-title">
               <div className="panel-heading">
                 <div>
-                  <span className="eyebrow">Ticket checker</span>
-                  <h2 id="ticket-lookup-title">ตรวจหมายเลขสลาก</h2>
-                  <p>เลือกกิจกรรม แล้วกรอกหมายเลขสลาก 5 หลักของคุณ</p>
+                  <span className="eyebrow">Prize checker</span>
+                  <h2 id="ticket-lookup-title">ตรวจสอบรางวัลของฉัน</h2>
+                  <p>เลือกกิจกรรม กรอกหมายเลขสลาก 5 หลัก แล้วกดตรวจผล</p>
                 </div>
                 {selectedEvent && (
                   <span className={`status-pill ${selectedEvent.status}`}>
@@ -182,6 +185,13 @@ export default function Home() {
                 )}
               </div>
 
+              {demoMode && (
+                <div className="notice demo-notice" role="status">
+                  กำลังแสดงข้อมูลตัวอย่าง ลองตรวจหมายเลข <strong>01287</strong>,{" "}
+                  <strong>01942</strong>, <strong>00128</strong> หรือ <strong>01128</strong>{" "}
+                  — เชื่อมต่อฐานข้อมูลเพื่อใช้ผลรางวัลจริง
+                </div>
+              )}
               {error && <div className="notice" role="alert">{error}</div>}
               <form className="lookup-form" onSubmit={checkTicket}>
                 <div>
@@ -244,7 +254,8 @@ export default function Home() {
                   {lookup.wins.map((win) => (
                     <p className="result-detail" key={`${win.wonAt}-${win.prizeCategory.name}`}>
                       ประเภทรางวัล <strong>{win.prizeCategory.name}</strong>
-                      {" · "}เลขที่สุ่มได้ {win.drawHistory.drawnNumber}
+                      {" · "}เลขที่ออก {win.drawHistory.drawnNumber}
+                      {" · "}ประกาศเมื่อ {formatDate(win.wonAt)}
                     </p>
                   ))}
                 </div>
@@ -254,9 +265,9 @@ export default function Home() {
             <section className="panel" aria-labelledby="latest-results-title">
               <div className="panel-heading">
                 <div>
-                  <span className="eyebrow">Latest results</span>
-                  <h2 id="latest-results-title">ผลรางวัลล่าสุด</h2>
-                  <p>แสดงเฉพาะผลที่ผู้ดูแลยืนยันและประกาศแล้ว</p>
+                  <span className="eyebrow">Winning numbers</span>
+                  <h2 id="latest-results-title">ประกาศผลรางวัล</h2>
+                  <p>เลขที่ออกและรายชื่อผู้ถูกรางวัลที่ประกาศแล้ว</p>
                 </div>
                 {selectedEvent && <span className="draw-type-pill">{selectedEvent.drawHistories.length} รอบ</span>}
               </div>
@@ -347,13 +358,13 @@ export default function Home() {
               <span className="eyebrow">How it works</span>
               <div className="event-summary">
                 <div className="event-summary-item">
-                  <span>01</span><strong>เลือกกิจกรรมและหมายเลข</strong>
+                  <span>01</span><strong>เลือกกิจกรรมและกรอกหมายเลขสลาก</strong>
                 </div>
                 <div className="event-summary-item">
-                  <span>02</span><strong>ตรวจสอบผลที่ประกาศแล้ว</strong>
+                  <span>02</span><strong>กดตรวจผลเพื่อดูรางวัลของคุณ</strong>
                 </div>
                 <div className="event-summary-item">
-                  <span>03</span><strong>ดูประวัติผู้ถูกรางวัลย้อนหลัง</strong>
+                  <span>03</span><strong>ดูเลขที่ออกและผู้โชคดีทั้งหมด</strong>
                 </div>
               </div>
               <p className="muted-copy">
@@ -365,8 +376,8 @@ export default function Home() {
       </main>
 
       <footer className="site-footer">
-        <span>LUCKY DRAW · ระบบจับสลากรางวัล</span>
-        <span>ผลการจับสลากที่ตรวจสอบได้ โปร่งใส และยุติธรรม</span>
+        <span>PRIZE CHECK · เว็บตรวจสอบรางวัล</span>
+        <span>ตรวจผลรางวัลได้ทุกหมายเลข โปร่งใส และตรวจสอบย้อนหลังได้</span>
       </footer>
     </div>
   );

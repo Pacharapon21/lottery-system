@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lucky Draw | ระบบจับสลากรางวัล",
-  description: "ระบบจับสลากรางวัล โปร่งใส ตรวจสอบผลได้ทุกหมายเลข",
+  title: "Prize Check | เว็บตรวจสอบรางวัล",
+  description: "ตรวจสอบผลรางวัลจากหมายเลขสลาก 5 หลัก พร้อมรายชื่อผู้โชคดีและประวัติการประกาศผล",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -1,10 +1,15 @@
 import { connection, NextResponse } from "next/server";
+import { DEMO_EVENTS, isDemoMode } from "@/lib/demo-data";
 import { errorResponse } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   await connection();
   try {
+    if (isDemoMode()) {
+      return NextResponse.json({ events: DEMO_EVENTS, demo: true });
+    }
+
     const events = await prisma.drawSession.findMany({
       where: { status: { in: ["ACTIVE", "COMPLETED"] } },
       orderBy: { createdAt: "desc" },
@@ -39,7 +44,7 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ events });
+    return NextResponse.json({ events, demo: false });
   } catch (error) {
     return errorResponse(error, "Public events lookup failed");
   }
