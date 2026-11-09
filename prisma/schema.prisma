@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum DrawType {
+  FULL_TICKET
+  LAST_3_DIGITS
+}
+
+enum DrawSessionStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}
+
+enum DrawStatus {
+  PENDING
+  CONFIRMED
+  ANNOUNCED
+}
+
+model Admin {
+  id                  String     @id @default(cuid())
+  email               String     @unique @db.VarChar(255)
+  passwordHash        String     @db.VarChar(255)
+  failedLoginAttempts Int        @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  auditLogs           AuditLog[]
+}
+
+model DrawSession {
+  id              String            @id @default(cuid())
+  name            String            @db.VarChar(120)
+  description     String?           @db.Text
+  ticketCount     Int               @default(0)
+  status          DrawSessionStatus @default(DRAFT)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  tickets         Ticket[]
+  prizeCategories PrizeCategory[]
+  drawHistories   DrawHistory[]
+  prizeResults    PrizeResult[]
+  auditLogs       AuditLog[]
+}
+
+model Ticket {
+  id            String        @id @default(cuid())
+  drawSessionId String
+  number        String        @db.VarChar(5)
+  createdAt     DateTime      @default(now())
+  drawSession   DrawSession   @relation(fields: [drawSessionId], references: [id], onDelete: Cascade)
+  prizeResults  PrizeResult[]
+
+  @@unique([drawSessionId, number])
+  @@unique([id, drawSessionId])
+}
+
+model PrizeCategory {
+  id            String        @id @default(cuid())
+  drawSessionId String
+  name          String        @db.VarChar(120)
+  drawType      DrawType
+  createdAt     DateTime      @default(now())
+  drawSession   DrawSession   @relation(fields: [drawSessionId], references: [id], onDelete: Cascade)
+  drawHistories DrawHistory[]
+  prizeResults  PrizeResult[]
+
+  @@unique([id, drawSessionId])
+  @@index([drawSessionId])
+}
+
+model DrawHistory {
+  id              String        @id @default(cuid())
+  drawSessionId   String
+  prizeCategoryId String
+  drawnNumber     String        @db.VarChar(5)
+  status          DrawStatus    @default(PENDING)
+  winnersCount    Int           @default(0)
+  startedAt       DateTime      @default(now())
+  confirmedAt     DateTime?
+  announcedAt     DateTime?
+  drawSession     DrawSession   @relation(fields: [drawSessionId], references: [id], onDelete: Cascade)
+  prizeCategory   PrizeCategory @relation(fields: [prizeCategoryId, drawSessionId], references: [id, drawSessionId], onDelete: Cascade)
+  prizeResults    PrizeResult[]
+
+  @@unique([id, drawSessionId])
+  @@index([drawSessionId, startedAt])
+  @@index([prizeCategoryId, startedAt])
+}
+
+model PrizeResult {
+  id              String        @id @default(cuid())
+  drawSessionId   String
+  ticketId        String
+  prizeCategoryId String
+  drawHistoryId   String
+  wonAt           DateTime      @default(now())
+  drawSession     DrawSession   @relation(fields: [drawSessionId], references: [id], onDelete: Cascade)
+  ticket          Ticket        @relation(fields: [ticketId, drawSessionId], references: [id, drawSessionId], onDelete: Cascade)
+  prizeCategory   PrizeCategory @relation(fields: [prizeCategoryId, drawSessionId], references: [id, drawSessionId], onDelete: Cascade)
+  drawHistory     DrawHistory   @relation(fields: [drawHistoryId, drawSessionId], references: [id, drawSessionId], onDelete: Cascade)
+
+  @@unique([ticketId, drawSessionId])
+  @@index([drawSessionId, wonAt])
+  @@index([prizeCategoryId])
+}
+
+model AuditLog {
+  id            String       @id @default(cuid())
+  adminId       String?
+  drawSessionId String?
+  action        String       @db.VarChar(80)
+  details       Json?
+  createdAt     DateTime     @default(now())
+  admin         Admin?       @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  drawSession   DrawSession? @relation(fields: [drawSessionId], references: [id], onDelete: SetNull)
+
+  @@index([drawSessionId, createdAt])
+  @@index([adminId, createdAt])
+}
